@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            platform: amd64
+          - os: linux
+            platform: arm64
+          - os: darwin
+            platform: amd64
+          - os: darwin
+            platform: arm64
+          - os: windows
+            platform: amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.20.x
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.platform }}
+        run: |
+          go build -trimpath -ldflags="-s -w"
+
+      - name: Archive files
+        run: |
+          ARCHIVE_FILENAME="crossjoin-${{ matrix.os }}-${{ matrix.platform }}.${{ matrix.os == 'windows' && 'zip' || 'tgz' }}"
+          echo "ARCHIVE_FILENAME=$ARCHIVE_FILENAME" >> $GITHUB_ENV
+
+          if [[ "${{ matrix.os }}" == "windows" ]]; then
+            7z a "$ARCHIVE_FILENAME" crossjoin.exe LICENSE README.md
+          else
+            tar czf "$ARCHIVE_FILENAME" crossjoin LICENSE README.md
+          fi
+
+      - name: Upload binaries
+        id: upload-binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: ${{ env.ARCHIVE_FILENAME }}
+
+  release:
+    name: Release
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: binaries/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
