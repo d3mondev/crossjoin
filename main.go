@@ -10,11 +10,8 @@ import (
 
 const programName = "crossjoin"
 const programVersion = "1.0.0"
-const programDescription = `Generate the cross join (or Cartesian product) of lines from the files specified.
-
-For instance, it can combine http:// or https:// from file1, various domains
-from file2, and assorted endpoints from file3, effectively creating a
-comprehensive list for tasks such as fuzzing or penetration testing.`
+const programDescription = `Generate the cross join, or Cartesian product, of the lines from the files
+specified.`
 
 type arguments struct {
 	help    bool
