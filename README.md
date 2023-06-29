@@ -27,6 +27,12 @@ crossjoin file1 file2 file3 [...fileN]
 
 Each file should contain a set of strings (lines) to be used in the permutations. `crossjoin` will then output the permutations to the console.
 
+If standard input (stdin) is provided, the program will use it as the first input.
+
+```bash
+command | crossjoin file1 file2 ...
+```
+
 ## Example
 
 Given the following 3 files:

@@ -3,15 +3,17 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/pflag"
 )
 
 const programName = "crossjoin"
-const programVersion = "1.0.0"
-const programDescription = `Generate the cross join, or Cartesian product, of the lines from the files
-specified.`
+const programVersion = "1.1.0"
+const programDescription = `Generate a cross join, also known as a Cartesian product, from the lines of the
+specified files. If standard input (stdin) is provided, the program will use it
+as the first input.`
 
 type arguments struct {
 	help    bool
@@ -66,33 +68,50 @@ func main() {
 }
 
 func process(filenames []string) error {
-	fileCount := len(filenames)
-	if fileCount == 0 {
-		return fmt.Errorf("no input file specified")
+	readerCount := len(filenames)
+
+	if hasStdin() {
+		readerCount++
 	}
 
-	files := make([]*os.File, fileCount)
-	scanners := make([]*bufio.Scanner, fileCount)
-	lines := make([][]byte, fileCount)
+	if readerCount == 0 {
+		return fmt.Errorf("no input specified")
+	}
 
-	writer := bufio.NewWriter(os.Stdout)
-	defer writer.Flush()
+	readers := make([]io.ReadSeeker, readerCount)
+	scanners := make([]*bufio.Scanner, readerCount)
+	lines := make([][]byte, readerCount)
 
-	// Initialize scanners and get first line from each file
-	for i, filename := range filenames {
+	// Initialize stdin
+	inputIndex := 0
+	if hasStdin() {
+		readers[inputIndex] = os.Stdin
+		inputIndex++
+	}
+
+	// Initialize files
+	for _, filename := range filenames {
 		file, err := os.Open(filename)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		scanner := bufio.NewScanner(file)
+		readers[inputIndex] = file
+		inputIndex++
+	}
+
+	// Initialize scanners and get first line from each
+	for i := 0; i < readerCount; i++ {
+		scanner := bufio.NewScanner(readers[i])
 		scanner.Scan()
 
-		files[i] = file
 		scanners[i] = scanner
 		lines[i] = scanner.Bytes()
 	}
+
+	writer := bufio.NewWriter(os.Stdout)
+	defer writer.Flush()
 
 	for {
 		// Print current line combination
@@ -102,7 +121,7 @@ func process(filenames []string) error {
 		writer.WriteByte('\n')
 
 		// Update combination starting from the last file
-		for i := fileCount - 1; i >= 0; i-- {
+		for i := readerCount - 1; i >= 0; i-- {
 			if scanners[i].Scan() {
 				lines[i] = scanners[i].Bytes()
 				break
@@ -113,14 +132,27 @@ func process(filenames []string) error {
 				}
 
 				// Reached the end of this file, rewind and continue with the next one
-				if _, err := files[i].Seek(0, 0); err != nil {
+				if _, err := readers[i].Seek(0, 0); err != nil {
 					return err
 				}
 
-				scanners[i] = bufio.NewScanner(files[i])
+				scanners[i] = bufio.NewScanner(readers[i])
 				scanners[i].Scan()
 				lines[i] = scanners[i].Bytes()
 			}
 		}
 	}
+}
+
+func hasStdin() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+
+	if fi.Mode()&os.ModeNamedPipe == 0 {
+		return false
+	}
+
+	return true
 }
